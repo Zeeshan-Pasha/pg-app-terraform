@@ -27,7 +27,7 @@ resource "aws_instance" "example" {
               cd /opt/pgapp
               
               # Clone your application
-              git clone https://github.com/Zeeshan-Pasha/PG_Appplication.git .
+              git clone https://github.com/Zeeshan-Pasha/PG_Application.git .
               chown -R ec2-user:ec2-user /opt/pgapp
               
               # Create startup script
