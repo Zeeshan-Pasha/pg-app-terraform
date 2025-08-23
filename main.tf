@@ -8,44 +8,86 @@ resource "aws_instance" "example" {
   # User data script to install .NET 8 and Node.js 20 for your app
   user_data = <<-EOF
               #!/bin/bash
+              exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
+              echo "Starting user-data script execution..."
+              
+              # Update system
               yum update -y
               
-              # Install .NET 8 SDK (matching your Dockerfile)
+              # Install .NET 8 SDK
+              echo "Installing .NET 8 SDK..."
               rpm -Uvh https://packages.microsoft.com/config/centos/7/packages-microsoft-prod.rpm
               yum install -y dotnet-sdk-8.0
               
-              # Install Node.js 20 (matching your Dockerfile)
-              curl -sL https://rpm.nodesource.com/setup_20.x | bash -
+              # Verify .NET installation
+              dotnet --version && echo ".NET installed successfully" || echo ".NET installation failed"
+              
+              # Install Node.js 20
+              echo "Installing Node.js 20..."
+              curl -fsSL https://rpm.nodesource.com/setup_20.x | bash -
               yum install -y nodejs
               
+              # Verify Node.js installation
+              node --version && echo "Node.js installed successfully" || echo "Node.js installation failed"
+              npm --version && echo "npm installed successfully" || echo "npm installation failed"
+              
               # Install Git
+              echo "Installing Git..."
               yum install -y git
               
               # Create app directory
+              echo "Creating app directory..."
               mkdir -p /opt/pgapp
               chown ec2-user:ec2-user /opt/pgapp
               cd /opt/pgapp
               
-              # Clone your application
-              git clone https://github.com/Zeeshan-Pasha/PG_Application.git .
-              chown -R ec2-user:ec2-user /opt/pgapp
+              # Clone your application with better error handling
+              echo "Cloning application repository..."
+              if git clone https://github.com/Zeeshan-Pasha/PG_Application.git temp; then
+                  echo "Repository cloned successfully"
+                  mv temp/* . 2>/dev/null || true
+                  mv temp/.* . 2>/dev/null || true
+                  rm -rf temp
+                  chown -R ec2-user:ec2-user /opt/pgapp
+                  echo "Repository files moved and ownership changed"
+              else
+                  echo "Failed to clone repository - creating empty structure"
+                  mkdir -p pg_application.client PG_Application.Server
+                  chown -R ec2-user:ec2-user /opt/pgapp
+              fi
+              
+              # List what we have
+              echo "Contents of /opt/pgapp:"
+              ls -la /opt/pgapp/
               
               # Create startup script
+              echo "Creating startup script..."
               cat > /opt/pgapp/start-app.sh << 'SCRIPT'
 #!/bin/bash
 cd /opt/pgapp
 
 echo "Building React frontend..."
-cd pg_application.client
-npm install --legacy-peer-deps
-npm run build
-cd ..
+if [ -d "pg_application.client" ]; then
+    cd pg_application.client
+    npm install --legacy-peer-deps
+    npm run build
+    cd ..
+    echo "React frontend built successfully"
+else
+    echo "Frontend directory not found"
+fi
 
 echo "Building .NET backend..."
-cd PG_Application.Server
-dotnet restore
-dotnet publish -c Release -o ../publish
-cd ../publish
+if [ -d "PG_Application.Server" ]; then
+    cd PG_Application.Server
+    dotnet restore
+    dotnet publish -c Release -o ../publish
+    cd ../publish
+    echo ".NET backend built successfully"
+else
+    echo "Backend directory not found"
+    exit 1
+fi
 
 echo "Starting .NET application..."
 export ASPNETCORE_URLS=http://0.0.0.0:5000
@@ -58,6 +100,7 @@ SCRIPT
               chmod +x /opt/pgapp/start-app.sh
               
               # Create systemd service for auto-start
+              echo "Creating systemd service..."
               cat > /etc/systemd/system/pgapp.service << 'SERVICE'
 [Unit]
 Description=PG Application (.NET 8 + React 19)
@@ -81,9 +124,16 @@ SERVICE
               systemctl daemon-reload
               systemctl enable pgapp
               
-              # Start the application after a delay (allow system to settle)
-              (sleep 60 && systemctl start pgapp) &
+              echo "Waiting 60 seconds before starting application..."
+              sleep 60
               
+              echo "Starting pgapp service..."
+              systemctl start pgapp
+              
+              echo "Checking service status..."
+              systemctl status pgapp
+              
+              echo "User-data script completed!"
               EOF
   
   tags = {
