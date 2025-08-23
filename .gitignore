@@ -1,0 +1,2 @@
+# Ignore sensitive Terraform variables
+terraform.tfvars
