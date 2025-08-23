@@ -13,15 +13,16 @@ echo "Starting user-data script execution..." > /var/log/user-data.log
 # Update system
 yum update -y >> /var/log/user-data.log 2>&1
 
+# Install Git early
+yum install -y git >> /var/log/user-data.log 2>&1
+
 # Install .NET 8 SDK
-echo "Installing .NET 8 SDK..." >> /var/log/user-data.log
 rpm -Uvh https://packages.microsoft.com/config/centos/7/packages-microsoft-prod.rpm >> /var/log/user-data.log 2>&1
 yum install -y dotnet-sdk-8.0 >> /var/log/user-data.log 2>&1
 
 # Install Node.js 20
-echo "Installing Node.js 20..." >> /var/log/user-data.log
 curl -fsSL https://rpm.nodesource.com/setup_20.x | bash - >> /var/log/user-data.log 2>&1
-yum install -y nodejs git >> /var/log/user-data.log 2>&1
+yum install -y nodejs >> /var/log/user-data.log 2>&1
 
 # Clone app
 mkdir -p /opt/pgapp
