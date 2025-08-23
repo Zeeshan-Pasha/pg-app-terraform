@@ -10,6 +10,9 @@ resource "aws_instance" "example" {
 #!/bin/bash
 echo "Starting user-data script execution..." > /var/log/user-data.log
 
+# Install Git first (move this earlier)
+yum install -y git >> /var/log/user-data.log 2>&1
+
 # Update system
 yum update -y >> /var/log/user-data.log 2>&1
 
