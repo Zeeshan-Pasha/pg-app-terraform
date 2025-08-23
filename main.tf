@@ -1,23 +1,79 @@
+resource "aws_security_group" "web_sg" {
+  name_prefix = "pg-app-sg-"
+  description = "Security group for PG Application (.NET 8 + React 19)"
+
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "SSH"
+  }
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "HTTP"
+  }
+
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "HTTPS"
+  }
+
+  ingress {
+    from_port   = 5000
+    to_port     = 5000
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = ".NET app port"
+  }
+
+  ingress {
+    from_port   = 5173
+    to_port     = 5173
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "Vite dev port"
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "All outbound"
+  }
+
+  tags = {
+    Name    = "PG-App-Security-Group"
+    Project = "DotNetCore8-React19"
+  }
+}
+
 resource "aws_instance" "example" {
-  ami           = "ami-09251aa2e0071bf5e"  # Your Mumbai region AMI
-  instance_type = var.instance_type
-  
-  # Basic security group allowing SSH and web traffic
+  ami                    = "ami-09251aa2e0071bf5e" # Mumbai Amazon Linux 2 AMI
+  instance_type          = var.instance_type
+  key_name               = var.key_name
   vpc_security_group_ids = [aws_security_group.web_sg.id]
-  
-  # User data script to install .NET 8 and Node.js 20 for your app
+  associate_public_ip_address = true
+  user_data_replace_on_change = true
+
   user_data = <<-EOF
 #!/bin/bash
-echo "Starting user-data script execution..." > /var/log/user-data.log
+set -euxo pipefail
+echo "Starting setup..." > /var/log/user-data.log
 
-# Update system
 yum update -y >> /var/log/user-data.log 2>&1
-
-# Install Git early
 yum install -y git >> /var/log/user-data.log 2>&1
 
-# Install .NET 8 SDK
-rpm -Uvh https://packages.microsoft.com/config/centos/7/packages-microsoft-prod.rpm >> /var/log/user-data.log 2>&1
+# Install .NET 8
+rpm -Uvh https://packages.microsoft.com/config/centos/7/packages-microsoft-prod.rpm >> /var/log/user-data.log 2>&1 || true
 yum install -y dotnet-sdk-8.0 >> /var/log/user-data.log 2>&1
 
 # Install Node.js 20
@@ -25,10 +81,8 @@ curl -fsSL https://rpm.nodesource.com/setup_20.x | bash - >> /var/log/user-data.
 yum install -y nodejs >> /var/log/user-data.log 2>&1
 
 # Clone app
-mkdir -p /opt/pgapp
-cd /opt/pgapp
-git clone https://github.com/Zeeshan-Pasha/PG_Application.git . >> /var/log/user-data.log 2>&1
-chown -R ec2-user:ec2-user /opt/pgapp
+mkdir -p /opt/pgapp && cd /opt/pgapp
+git clone https://${var.github_user}:${urlencode(var.github_token)}@github.com/Zeeshan-Pasha/PG_Application.git . >> /var/log/user-data.log 2>&1
 
 # Build frontend
 if [ -d "pg_application.client" ]; then
@@ -42,82 +96,34 @@ fi
 if [ -d "PG_Application.Server" ]; then
   cd PG_Application.Server
   dotnet restore >> /var/log/user-data.log 2>&1
-  dotnet publish -c Release -o ../publish >> /var/log/user-data.log 2>&1
-  cd ../publish
-  nohup dotnet PG_Application.Server.dll > /opt/pgapp/app.log 2>&1 &
+  dotnet publish -c Release -o /opt/pgapp/publish >> /var/log/user-data.log 2>&1
 fi
 
-echo "User-data script completed" >> /var/log/user-data.log
+# Create systemd service
+cat >/etc/systemd/system/pgapp.service <<SERVICE
+[Unit]
+Description=PG Application
+After=network.target
+
+[Service]
+WorkingDirectory=/opt/pgapp/publish
+ExecStart=/usr/bin/dotnet PG_Application.Server.dll
+Restart=always
+User=ec2-user
+Environment=ASPNETCORE_URLS=http://0.0.0.0:5000
+
+[Install]
+WantedBy=multi-user.target
+SERVICE
+
+systemctl daemon-reload
+systemctl enable pgapp
+systemctl start pgapp
 EOF
-  
+
   tags = {
-    Name = "PG-Application-Server"
-    Project = "DotNetCore8-React19"
+    Name        = "PG-Application-Server"
+    Project     = "DotNetCore8-React19"
     Environment = "Development"
-  }
-}
-
-# Security Group for web application
-resource "aws_security_group" "web_sg" {
-  name_prefix = "pg-app-sg"
-  description = "Security group for PG Application (.NET 8 + React 19)"
-
-  # SSH access
-  ingress {
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-    description = "SSH access"
-  }
-
-  # HTTP access
-  ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-    description = "HTTP access"
-  }
-
-  # HTTPS access
-  ingress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-    description = "HTTPS access"
-  }
-
-  # .NET 8 application port (matches your Dockerfile EXPOSE)
-  ingress {
-    from_port   = 5000
-    to_port     = 5000
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-    description = ".NET 8 application port"
-  }
-
-  # Vite dev server port (for development)
-  ingress {
-    from_port   = 5173
-    to_port     = 5173
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-    description = "Vite dev server port"
-  }
-
-  # All outbound traffic
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-    description = "All outbound traffic"
-  }
-
-  tags = {
-    Name = "PG-App-Security-Group"
-    Project = "DotNetCore8-React19"
   }
 }
