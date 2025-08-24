@@ -1,6 +1,21 @@
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+  required_version = ">= 1.3.0"
+}
+
+provider "aws" {
+  region = "ap-south-1"
+}
+
+# Security Group
 resource "aws_security_group" "web_sg" {
   name_prefix = "pg-app-sg-"
-  description = "Security group for PG Application (.NET 8 + React 19)"
+  description = "Security group for PG Application (.NET 8 + React 20)"
 
   ingress {
     from_port   = 22
@@ -52,95 +67,73 @@ resource "aws_security_group" "web_sg" {
 
   tags = {
     Name    = "PG-App-Security-Group"
-    Project = "DotNetCore8-React19"
+    Project = "DotNetCore8-React20"
   }
 }
 
+# Use the latest Amazon Linux 2023 AMI
+data "aws_ami" "amazon_linux_2023" {
+  most_recent = true
+  owners      = ["amazon"]
+
+  filter {
+    name   = "name"
+    values = ["amzn2023-ami-kernel-6.4*"]
+  }
+}
+
+# EC2 Instance
 resource "aws_instance" "example" {
-  ami                         = "ami-09251aa2e0071bf5e" # Mumbai Amazon Linux 2 AMI
-  instance_type              = var.instance_type
-  key_name                   = var.key_name
-  vpc_security_group_ids     = [aws_security_group.web_sg.id]
+  ami                         = data.aws_ami.amazon_linux_2023.id
+  instance_type               = var.instance_type
+  key_name                    = var.key_name
+  vpc_security_group_ids      = [aws_security_group.web_sg.id]
   associate_public_ip_address = true
-  user_data_replace_on_change = true
 
   user_data = <<-EOF
 #!/bin/bash
 set -euxo pipefail
 
-# Enhanced logging
 exec > >(tee /var/log/user-data.log) 2>&1
-echo "========================================="
-echo "Starting setup at $(date)"
-echo "========================================="
 
 # Update system
-echo "Updating system packages..."
-yum update -y
+dnf update -y
 
-# Install prerequisites
-echo "Installing prerequisites..."
-yum install -y wget curl git
-
-# Install .NET 8 SDK for Amazon Linux 2
-echo "Installing .NET 8 SDK..."
-wget https://packages.microsoft.com/config/centos/7/packages-microsoft-prod.rpm
-rpm -Uvh packages-microsoft-prod.rpm
-yum install -y dotnet-sdk-8.0
-
-# Verify .NET installation
-echo "Verifying .NET installation..."
-dotnet --version || echo "ERROR: .NET installation failed"
-
-# Install Node.js 20 LTS
-echo "Installing Node.js 20..."
+# Install .NET 8 SDK and Node.js 20
+dnf install -y wget git
+wget https://packages.microsoft.com/config/centos/9/packages-microsoft-prod.rpm
+dnf install -y packages-microsoft-prod.rpm
+dnf install -y dotnet-sdk-8.0
 curl -fsSL https://rpm.nodesource.com/setup_20.x | bash -
-yum install -y nodejs
-
-# Verify Node.js installation
-echo "Verifying Node.js installation..."
-node --version || echo "ERROR: Node.js installation failed"
-npm --version || echo "ERROR: npm installation failed"
+dnf install -y nodejs
 
 # Create application directory
-echo "Setting up application directory..."
 mkdir -p /opt/pgapp
 cd /opt/pgapp
 
-# Clone repository with better error handling
-echo "Cloning repository..."
-if ! git clone https://${var.github_user}:${urlencode(var.github_token)}@github.com/Zeeshan-Pasha/PG_Application.git .; then
-    echo "ERROR: Failed to clone repository"
-    exit 1
-fi
+# Clone repository
+git clone https://${var.github_user}:${var.github_token}@github.com/Zeeshan-Pasha/PG_Application.git .
 
-# Set proper ownership
+# Set ownership
 chown -R ec2-user:ec2-user /opt/pgapp
 
-# Build frontend as ec2-user
-echo "Building frontend..."
+# Build frontend
 if [ -d "pg_application.client" ]; then
-    cd pg_application.client
-    sudo -u ec2-user npm install --legacy-peer-deps
-    sudo -u ec2-user npm run build
-    cd ..
-else
-    echo "WARNING: Frontend directory not found"
+  cd pg_application.client
+  sudo -u ec2-user npm install --legacy-peer-deps
+  sudo -u ec2-user npm run build
+  cd ..
 fi
 
 # Build backend
-echo "Building backend..."
 if [ -d "PG_Application.Server" ]; then
-    cd PG_Application.Server
-    sudo -u ec2-user dotnet restore
-    sudo -u ec2-user dotnet publish -c Release -o /opt/pgapp/publish
-    cd ..
-else
-    echo "WARNING: Backend directory not found"
+  cd PG_Application.Server
+  sudo -u ec2-user dotnet restore
+  sudo -u ec2-user dotnet publish -c Release -o /opt/pgapp/publish
+  cd ..
 fi
 
 # Create systemd service
-echo "Creating systemd service..."
 cat > /etc/systemd/system/pgapp.service << 'SERVICE'
 [Unit]
 Description=PG Application
@@ -162,33 +155,17 @@ KillMode=process
 WantedBy=multi-user.target
 SERVICE
 
-# Start the service
-echo "Starting PG Application service..."
 systemctl daemon-reload
 systemctl enable pgapp
 
-# Check if the published files exist before starting
 if [ -f "/opt/pgapp/publish/PG_Application.Server.dll" ]; then
-    systemctl start pgapp
-    echo "Service started successfully"
-else
-    echo "ERROR: Published application files not found"
+  systemctl start pgapp
 fi
-
-# Final status check
-echo "========================================="
-echo "Setup completed at $(date)"
-echo "========================================="
-echo "System status:"
-echo "- .NET version: $(dotnet --version 2>/dev/null || echo 'Not installed')"
-echo "- Node.js version: $(node --version 2>/dev/null || echo 'Not installed')"
-echo "- Service status: $(systemctl is-active pgapp 2>/dev/null || echo 'Not running')"
-echo "========================================="
 EOF
 
   tags = {
     Name        = "PG-Application-Server"
-    Project     = "DotNetCore8-React19"
+    Project     = "DotNetCore8-React20"
     Environment = "Development"
   }
 }
