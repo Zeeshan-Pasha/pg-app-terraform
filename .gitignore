@@ -1,2 +1,4 @@
 # Ignore sensitive Terraform variables
 terraform.tfvars
+.terraform/
+.terraform.lock.hcl
