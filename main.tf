@@ -2,12 +2,12 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 4.66"
+      version = "~> 5.0"
     }
   }
-
-  required_version = ">= 1.3.0, <= 1.13.0"
+  required_version = ">= 1.3.0"
 }
+
 # Security Group
 resource "aws_security_group" "web_sg" {
   name_prefix = "pg-app-sg-"
