@@ -1,4 +1,22 @@
-# Ignore sensitive Terraform variables
+# Ignore Terraform variable files containing sensitive data
 terraform.tfvars
+terraform.tfvars.json
+
+# Ignore Terraform state files and backups
+terraform.tfstate
+terraform.tfstate.backup
+
+# Ignore Terraform local directories and plugin downloads
 .terraform/
-.terraform.lock.hcl
+
+# Ignore key files (like your EC2 PEM keys)
+*.pem
+
+# Optional: Ignore logs or local scripts you don't want in repo
+*.log
+deploy_app.sh
+
+# Ignore IDE/editor files
+.vscode/
+*.swp
+*.bak
