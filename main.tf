@@ -71,20 +71,20 @@ resource "aws_security_group" "web_sg" {
   }
 }
 
-# Use the latest Amazon Linux 2023 AMI
-data "aws_ami" "amazon_linux_2023" {
+# Use latest Ubuntu 24.04 LTS AMI
+data "aws_ami" "ubuntu" {
   most_recent = true
-  owners      = ["amazon"]
+  owners      = ["099720109477"] # Canonical
 
   filter {
     name   = "name"
-    values = ["amzn2023-ami-kernel-6.4*"]
+    values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-24.04-amd64-server-*"]
   }
 }
 
 # EC2 Instance
 resource "aws_instance" "example" {
-  ami                         = data.aws_ami.amazon_linux_2023.id
+  ami                         = data.aws_ami.ubuntu.id
   instance_type               = var.instance_type
   key_name                    = var.key_name
   vpc_security_group_ids      = [aws_security_group.web_sg.id]
@@ -97,15 +97,22 @@ set -euxo pipefail
 exec > >(tee /var/log/user-data.log) 2>&1
 
 # Update system
-dnf update -y
+apt-get update -y
+apt-get upgrade -y
 
-# Install .NET 8 SDK and Node.js 20
-dnf install -y wget git
-wget https://packages.microsoft.com/config/centos/9/packages-microsoft-prod.rpm
-dnf install -y packages-microsoft-prod.rpm
-dnf install -y dotnet-sdk-8.0
-curl -fsSL https://rpm.nodesource.com/setup_20.x | bash -
-dnf install -y nodejs
+# Install prerequisites
+apt-get install -y wget git curl software-properties-common
+
+# Install .NET 8 SDK
+wget https://packages.microsoft.com/config/ubuntu/24.04/packages-microsoft-prod.deb -O packages-microsoft-prod.deb
+dpkg -i packages-microsoft-prod.deb
+rm packages-microsoft-prod.deb
+apt-get update -y
+apt-get install -y dotnet-sdk-8.0
+
+# Install Node.js 20
+curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+apt-get install -y nodejs
 
 # Create application directory
 mkdir -p /opt/pgapp
@@ -115,21 +122,21 @@ cd /opt/pgapp
 git clone https://${var.github_user}:${var.github_token}@github.com/Zeeshan-Pasha/PG_Application.git .
 
 # Set ownership
-chown -R ec2-user:ec2-user /opt/pgapp
+chown -R ubuntu:ubuntu /opt/pgapp
 
 # Build frontend
 if [ -d "pg_application.client" ]; then
   cd pg_application.client
-  sudo -u ec2-user npm install --legacy-peer-deps
-  sudo -u ec2-user npm run build
+  sudo -u ubuntu npm install --legacy-peer-deps
+  sudo -u ubuntu npm run build
   cd ..
 fi
 
 # Build backend
 if [ -d "PG_Application.Server" ]; then
   cd PG_Application.Server
-  sudo -u ec2-user dotnet restore
-  sudo -u ec2-user dotnet publish -c Release -o /opt/pgapp/publish
+  sudo -u ubuntu dotnet restore
+  sudo -u ubuntu dotnet publish -c Release -o /opt/pgapp/publish
   cd ..
 fi
 
@@ -144,12 +151,9 @@ WorkingDirectory=/opt/pgapp/publish
 ExecStart=/usr/bin/dotnet PG_Application.Server.dll
 Restart=always
 RestartSec=10
-User=ec2-user
+User=ubuntu
 Environment=ASPNETCORE_ENVIRONMENT=Production
 Environment=ASPNETCORE_URLS=http://0.0.0.0:5000
-KillSignal=SIGINT
-TimeoutStopSec=90
-KillMode=process
 
 [Install]
 WantedBy=multi-user.target
@@ -157,10 +161,7 @@ SERVICE
 
 systemctl daemon-reload
 systemctl enable pgapp
-
-if [ -f "/opt/pgapp/publish/PG_Application.Server.dll" ]; then
-  systemctl start pgapp
-fi
+systemctl start pgapp
 EOF
 
   tags = {
