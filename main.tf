@@ -8,10 +8,6 @@ terraform {
   required_version = ">= 1.3.0"
 }
 
-provider "aws" {
-  region = "ap-south-1"
-}
-
 # Security Group
 resource "aws_security_group" "web_sg" {
   name_prefix = "pg-app-sg-"
