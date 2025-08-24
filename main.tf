@@ -1,17 +1,3 @@
-terraform {
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
-  }
-  required_version = ">= 1.3.0"
-}
-
-provider "aws" {
-  region = var.aws_region
-}
-
 # Security Group
 resource "aws_security_group" "web_sg" {
   name_prefix = "pg-app-sg-"
@@ -107,7 +93,7 @@ apt-get install -y nodejs
 mkdir -p /opt/pgapp
 cd /opt/pgapp
 
-# Clone repository
+# Clone repository using variables from Terraform
 git clone https://${var.github_user}:${var.github_token}@github.com/Zeeshan-Pasha/PG_Application.git .
 
 # Set ownership
@@ -159,19 +145,3 @@ EOF
     Environment = "Development"
   }
 }
-
-# Variables
-variable "aws_region" {
-  default = "ap-south-1"
-}
-
-variable "instance_type" {
-  default = "t3.micro"
-}
-
-variable "key_name" {
-  default = "pg-app-key"
-}
-
-variable "github_user" {}
-variable "github_token" {}
