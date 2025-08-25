@@ -94,7 +94,7 @@ mkdir -p /opt/pgapp
 cd /opt/pgapp
 
 # Clone repository using variables from Terraform
-git clone https://${var.github_user}:${var.github_token}@github.com/Zeeshan-Pasha/PG_Application.git .
+git clone https://${var.github_user}:${var.github_token}@github.com/Zeeshan-Pasha/PG_Appplication.git .
 
 # Set ownership
 chown -R ubuntu:ubuntu /opt/pgapp
