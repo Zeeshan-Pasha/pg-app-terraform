@@ -16,14 +16,8 @@ variable "key_name" {
   default     = "pg-app-key" # Change to your key pair
 }
 
-variable "github_user" {
-  description = "GitHub username"
+variable "docker_image" {
+  description = "Docker image name for the application"
   type        = string
-  sensitive   = true
-}
-
-variable "github_token" {
-  description = "GitHub Personal Access Token"
-  type        = string
-  sensitive   = true
+  default     = "zeeshan781/pg-application:latest"
 }
