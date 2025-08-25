@@ -105,6 +105,8 @@ if [ -d "pg_application.client" ]; then
   sudo -u ubuntu npm install --legacy-peer-deps
   sudo -u ubuntu npm run build
   cd ..
+# Copy frontend build into wwwroot of the backend
+  cp -r pg_application.client/dist/* PG_Application.Server/wwwroot/
 fi
 
 # Build backend
