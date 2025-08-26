@@ -325,7 +325,7 @@ ATTEMPT=1
 while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
     echo "HTTP check attempt $ATTEMPT/$MAX_ATTEMPTS..."
     
-    response=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:5000 || echo "000")
+    response=$(curl -s -o /dev/null -w "%%{http_code}" http://localhost:5000 || echo "000")
     
     if [ "$response" = "200" ]; then
         echo "✅ Application is healthy (HTTP $response)"
